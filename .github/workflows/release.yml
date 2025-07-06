@@ -1,0 +1,58 @@
+# .github/workflows/release.yml
+
+name: Build and Release Conjure Client
+
+on:
+  # This workflow runs when a new tag is pushed.
+  # We recommend using semantic versioning tags like v1.0.0.
+  push:
+    tags:
+      - 'v*.*.*'
+
+# Sets the permissions for the GITHUB_TOKEN to allow creating a release.
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest # Use the latest Ubuntu runner
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x' # Use a recent version of Go
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libczmq-dev
+
+      - name: Build Conjure client
+        run: |
+          # The binary will be named based on the OS and architecture.
+          ARTIFACT_NAME="conjure-client-linux-amd64"
+          
+          # Navigate to the client source directory
+          cd client
+          
+          # Build the Go binary. -ldflags strips debug symbols to reduce size.
+          go build -v -ldflags="-s -w" -o $ARTIFACT_NAME
+          
+          # Move the compiled binary to the root directory for easy upload
+          mv $ARTIFACT_NAME ../
+          
+          # Set the asset path as an environment variable for the next step
+          echo "ASSET_PATH=./${ARTIFACT_NAME}" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        # This action creates a release and uploads assets.
+        # It automatically uses the tag name for the release title.
+        uses: softprops/action-gh-release@v2
+        with:
+          # The `files` input supports glob patterns. We upload the binary we built.
+          files: ${{ env.ASSET_PATH }}
