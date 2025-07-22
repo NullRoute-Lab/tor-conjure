@@ -1,0 +1,53 @@
+name: Build and Release Multi-Arch Conjure Client
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            name: conjure-client-linux-amd64-musl
+            cgo: 0 # Build with musl for Alpine compatibility
+          - goos: linux
+            goarch: arm64
+            name: conjure-client-linux-arm64-musl
+            cgo: 0 # Build with musl for Alpine compatibility
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+
+      - name: Install dependencies (for CGo if needed, here for consistency)
+        run: sudo apt-get update && sudo apt-get install -y libczmq-dev
+
+      - name: Build Conjure client
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: ${{ matrix.cgo }}
+        run: |
+          cd client
+          go build -v -ldflags="-s -w" -o ${{ matrix.name }}
+          mv ${{ matrix.name }} ../
+          echo "ASSET_PATH=./${{ matrix.name }}" >> $GITHUB_ENV
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.ASSET_PATH }}
